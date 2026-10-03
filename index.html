@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle Financeiro</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f6f8;--card:#c9d2dc;--c2:#fff;--tx:#1a1d21;--mut:#5b6672;--ac:#2b5c8a;--ok:#2e8b57;--wa:#c98a00;--er:#c0392b;--bd:#d5dbe1}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14181c;--card:#2a3541;--c2:#1d242b;--tx:#e8ecef;--mut:#9aa6b2;--ac:#6aa7dc;--ok:#4cc38a;--wa:#e0b040;--er:#ef6b5c;--bd:#33404c}}
+:root[data-theme="dark"]{--bg:#14181c;--card:#2a3541;--c2:#1d242b;--tx:#e8ecef;--mut:#9aa6b2;--ac:#6aa7dc;--ok:#4cc38a;--wa:#e0b040;--er:#ef6b5c;--bd:#33404c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px system-ui,-apple-system,Segoe UI,sans-serif;max-width:720px;margin:auto;padding:12px 12px 80px}
+h2{text-align:center;margin:8px 0 12px;font-size:19px}
+.nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+.nav button{flex:none;border:0;background:var(--c2);color:var(--tx);padding:9px 13px;border-radius:20px;font-size:14px;border:1px solid var(--bd)}
+.nav button.on{background:var(--ac);color:#fff}
+.mon{display:flex;align-items:center;justify-content:space-between;margin:8px 0}
+.mon button{border:0;background:var(--c2);color:var(--tx);width:40px;height:40px;border-radius:50%;font-size:18px;border:1px solid var(--bd)}
+.mon b{text-transform:capitalize;font-size:17px}
+.pill{background:var(--card);border-radius:28px;padding:16px 20px;margin:8px 0;display:flex;justify-content:space-between;align-items:center}
+.pill.big{flex-direction:column;gap:4px;padding:22px}
+.pill.big b{font-size:30px}.pill b{font-size:18px}
+.pill small{color:var(--mut)}
+.btn{display:block;width:100%;border:0;background:var(--ac);color:#fff;font-size:20px;font-weight:700;padding:16px;border-radius:28px;margin:10px 0}
+.sm{border:1px solid var(--bd);background:var(--c2);color:var(--tx);border-radius:8px;padding:6px 10px;font-size:13px}
+table{width:100%;border-collapse:collapse;background:var(--c2);border-radius:10px;overflow:hidden;margin:8px 0}
+th{background:#1c1c1c;color:#fff;font-size:13px;padding:9px 6px}
+td{border-bottom:1px solid var(--bd);padding:9px 6px;font-size:14px;text-align:center}
+td:first-child{text-align:left}
+.wrap{overflow-x:auto}
+.row{background:var(--c2);border-left:5px solid var(--bd);border-radius:10px;padding:10px 12px;margin:7px 0}
+.row.paid{border-color:var(--ok);opacity:.7}.row.paid .n{text-decoration:line-through}
+.row.soon{border-color:var(--wa)}.row.late{border-color:var(--er)}
+.row .t{display:flex;justify-content:space-between;gap:8px}
+.row .m{color:var(--mut);font-size:12.5px;margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+select,input{font:inherit;color:var(--tx);background:var(--c2);border:1px solid var(--bd);border-radius:8px;padding:8px;width:100%}
+select.sm{width:auto}
+.bar{height:10px;background:var(--bd);border-radius:6px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ok)}
+.sec{font-weight:700;margin:16px 0 4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{background:var(--c2);border-radius:12px;padding:12px;margin:8px 0;border:1px solid var(--bd)}
+.mod{position:fixed;inset:0;background:#0008;display:none;align-items:flex-end;justify-content:center;z-index:9}
+.mod.on{display:flex}
+.mod>div{background:var(--bg);width:100%;max-width:720px;max-height:92%;overflow:auto;padding:16px;border-radius:20px 20px 0 0}
+.mod label{display:block;margin:10px 0 4px;color:var(--mut);font-size:13px}
+.er{color:var(--er)}.ok{color:var(--ok)}.mut{color:var(--mut)}
+</style></head><body>
+<div id="login" class="card" style="display:none;margin-top:60px">
+<h2>💰 Controle Financeiro</h2>
+<label class="mut">E-mail</label><input id="le" type="email" autocomplete="username">
+<label class="mut" style="display:block;margin-top:10px">Senha</label><input id="lp" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+<button class="btn" onclick="doLogin()" style="font-size:17px">Entrar</button>
+<p id="lerr" class="er" style="text-align:center;margin:0"></p></div>
+<div id="main" style="display:none"><div class="nav" id="nav"></div>
+<div id="app"></div></div>
+<div class="mod" id="mod"><div id="modc"></div></div>
+<script>
+const P={h:'Hecarlos',j:'Jéssica',a:'Alexandre/Tiago'};
+const SH={'3':{h:.25,j:.25,a:.5},'2':{h:.5,j:.5,a:0}};
+const R=v=>(+v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+let S={acc:[],inc:{},paid:{}};
+const save=()=>{window.cloudSave&&window.cloudSave(S)};
+window.setState=d=>{S=Object.assign({acc:[],inc:{},paid:{}},d||{});render()};
+const mk=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+const today=new Date();today.setHours(0,0,0,0);
+let M=mk(today),tab='home',confirmDel=null;
+const mi=k=>{const[y,m]=k.split('-').map(Number);return y*12+m-1};
+const fromI=i=>Math.floor(i/12)+'-'+String(i%12+1).padStart(2,'0');
+const shift=(k,n)=>fromI(mi(k)+n);
+const mname=k=>{const[y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})};
+function occ(k){const out=[];for(const a of S.acc){const d=mi(k)-mi(a.venc.slice(0,7));const n=+a.parc||1;
+ if(d<0)continue;if(n>1){if(d>=n)continue}else if(a.cat!=='fixa'&&d!==0)continue;
+ const[y,m]=k.split('-').map(Number),dia=Math.min(+a.venc.slice(8),new Date(y,m,0).getDate());
+ out.push({a,k,key:a.id+'@'+k,due:new Date(y,m-1,dia),lbl:n>1?` (${d+1}/${n})`:''})}
+ return out.sort((x,y)=>x.due-y.due)}
+const share=(o,p)=>o.a.valor*SH[o.a.div][p];
+const sum=(l,p)=>l.reduce((s,o)=>s+(p?share(o,p):+o.a.valor),0);
+function overdue(){const l=[];if(!S.acc.length)return l;const st=S.acc.map(a=>mi(a.venc.slice(0,7))).reduce((a,b)=>Math.min(a,b));
+ for(let i=st;i<=mi(mk(today));i++)occ(fromI(i)).forEach(o=>{if(!S.paid[o.key]&&o.due<today)l.push(o)});return l}
+function inc(k,p){const v=S.inc[k]?.[p];if(v&&v.r!==''&&v.r!=null)return{v:+v.r,s:'real'};if(v&&v.p!==''&&v.p!=null)return{v:+v.p,s:'prev'};
+ for(let i=1;i<=24;i++){const w=S.inc[shift(k,-i)]?.[p];if(w){const x=(w.r!==''&&w.r!=null)?w.r:w.p;if(x!==''&&x!=null)return{v:+x,s:'base'}}}return{v:0,s:'-'}}
+function setInc(p,f,val){S.inc[M]=S.inc[M]||{};S.inc[M][p]=S.inc[M][p]||{p:'',r:''};S.inc[M][p][f]=val;save();render()}
+function setPaid(key,v){if(v)S.paid[key]=v;else delete S.paid[key];save();render()}
+function payer(o){return`<select class="sm" onchange="setPaid('${o.key}',this.value)"><option value="">Pagar…</option>${Object.entries(P).map(([k,n])=>`<option value="${k}" ${S.paid[o.key]===k?'selected':''}>Pago por ${n}</option>`).join('')}</select>`}
+function row(o,p){const pd=S.paid[o.key],d=Math.round((o.due-today)/864e5),c=pd?'paid':d<0?'late':d<=3?'soon':'';
+ const st=pd?'<span class="ok">✔ pago</span>':d<0?`<span class="er">${-d}d em atraso</span>`:d<=3?`<span style="color:var(--wa)">vence ${d?'em '+d+'d':'hoje'}</span>`:'';
+ return`<div class="row ${c}"><div class="t"><span class="n">${o.a.nome}${o.lbl}</span><b>${R(p?share(o,p):o.a.valor)}</b></div>
+ <div class="m"><span>${o.due.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</span><span>${o.a.div==='3'?'÷3 (25/25/50)':'÷2 (50/50)'}</span><span>${o.a.cat}</span>${st}${payer(o)}
+ <button class="sm" onclick="openForm('${o.a.id}')">Editar</button></div></div>`}
+function nav(){document.getElementById('nav').innerHTML=[['home','Início'],['h','Hecarlos'],['j','Jéssica'],['a','Alexandre/Tiago'],['late','Vencidas']].map(([k,n])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${n}</button>`).join('')+'<button onclick="cloudOut()">Sair</button>'}
+const mon=()=>`<div class="mon"><button onclick="M=shift(M,-1);render()">‹</button><b>${mname(M)}</b><button onclick="M=shift(M,1);render()">›</button></div>`;
+function home(){const l=occ(M),od=overdue(),tot=sum(l);
+ const fx=l.filter(o=>o.a.cat==='fixa').reduce((s,o)=>s+ +o.a.valor,0),vr=tot-fx;
+ const inH=inc(M,'h').v,inJ=inc(M,'j').v,dH=sum(l,'h'),dJ=sum(l,'j');
+ const paidBy={h:0,j:0,a:0},own={h:0,j:0,a:0};
+ l.forEach(o=>{const p=S.paid[o.key];if(p){paidBy[p]+=+o.a.valor;['h','j','a'].forEach(q=>own[q]+=share(o,q))}});
+ const net=Object.keys(P).map(p=>[p,paidBy[p]-own[p]]).filter(x=>Math.abs(x[1])>0.5);
+ return mon()+`<h2>Total Geral de Contas</h2><div class="pill big"><b>${R(tot)}</b><small>${l.length} contas · pagamento programado dia 10</small></div>
+ ${['h','j','a'].map(p=>`<div class="pill"><span>Sub Total: ${P[p]}</span><b>${R(sum(l,p))}</b></div>`).join('')}
+ <button class="btn" onclick="openForm()">Cadastra conta</button>
+ <div class="pill" onclick="tab='late';render()" style="cursor:pointer"><span>Vencidas: <b class="${od.length?'er':''}">${od.length}</b></span><span>Valor total: <b class="${od.length?'er':''}">${R(sum(od))}</b></span></div>
+ <div class="sec">Saldos</div><div class="wrap"><table><tr><th></th><th>Saldo Inicial</th><th>Saldo Pós conta</th></tr>
+ <tr><td>Casa</td><td>${R(inH+inJ)}</td><td>${R(inH+inJ-dH-dJ)}</td></tr>
+ <tr><td>Hecarlos</td><td>${R(inH)}</td><td>${R(inH-dH)}</td></tr><tr><td>Jéssica</td><td>${R(inJ)}</td><td>${R(inJ-dJ)}</td></tr></table></div>
+ <div class="sec">Fixas × Variáveis</div><div class="card"><div class="bar"><i style="width:${tot?fx/tot*100:0}%;background:var(--ac)"></i></div>
+ <div class="m mut" style="display:flex;justify-content:space-between;margin-top:6px"><span>Fixas ${R(fx)}</span><span>Variáveis ${R(vr)}</span></div></div>
+ ${net.length?`<div class="sec">Acertos entre pessoas</div><div class="card">${net.map(([p,v])=>`<div>${P[p]} ${v>0?'<b class="ok">tem a receber</b>':'<b class="er">deve</b>'} ${R(Math.abs(v))}</div>`).join('')}</div>`:''}
+ <div class="sec">Contas do mês</div>${l.map(o=>row(o)).join('')||'<p class="mut">Nenhuma conta neste mês.</p>'}`}
+function person(p){const l=occ(M).filter(o=>SH[o.a.div][p]>0),d=sum(l,p),has=p!=='a',i=inc(M,p),v=S.inc[M]?.[p]||{p:'',r:''};
+ let h=mon()+`<h2>Descrição: ${P[p]}</h2><div class="grid"><div class="pill"><span>Despesa total:<br><b>${R(d)}</b></span></div>`;
+ if(has)h+=`<div class="pill"><span>Saldo Livre:<br><b class="${i.v-d<0?'er':''}">${R(i.v-d)}</b></span></div></div><div class="bar"><i style="width:${i.v?Math.max(0,Math.min(100,(i.v-d)/i.v*100)):0}%"></i></div>`;else h+='</div>';
+ h+=l.map(o=>row(o,p)).join('')||'<p class="mut">Nenhuma conta neste mês.</p>';
+ if(has){h+=`<div class="pill"><b>Renda: ${R(i.v)}</b><small>${{real:'valor exato',prev:'previsto',base:'base do mês anterior','-':'não informada'}[i.s]}</small></div>
+ <div class="grid"><div><label class="mut">Previsto</label><input type="number" inputmode="decimal" value="${v.p!==''?v.p:''}" placeholder="${inc(shift(M,-1),p).v||''}" onchange="setInc('${p}','p',this.value)"></div>
+ <div><label class="mut">Valor exato (quando receber)</label><input type="number" inputmode="decimal" value="${v.r!==''?v.r:''}" onchange="setInc('${p}','r',this.value)"></div></div>
+ <div class="sec">Rendas anteriores</div><div class="card">${[1,2,3,4,5,6].map(n=>{const k=shift(M,-n),x=inc(k,p);return`<div style="display:flex;justify-content:space-between"><span style="text-transform:capitalize">${mname(k)}</span><b>${x.s==='base'||x.s==='-'?'—':R(x.v)}</b></div>`}).join('')}</div>`}
+ return h}
+function late(){const l=overdue();return`<h2>Contas vencidas</h2><div class="pill"><span>Total de contas: <b class="er">${l.length}</b></span><span>Valor: <b class="er">${R(sum(l))}</b></span></div>
+ ${l.map(o=>`<div class="mut" style="margin-top:10px;font-size:12.5px;text-transform:capitalize">${mname(o.k)}</div>`+row(o)).join('')||'<p class="mut" style="text-align:center">Nenhuma conta vencida 🎉</p>'}`}
+function render(){nav();document.getElementById('app').innerHTML=tab==='home'?home():tab==='late'?late():person(tab)}
+function openForm(id){const a=S.acc.find(x=>x.id===id)||{nome:'',valor:'',venc:mk(today)+'-10',div:'3',parc:1,cat:'variavel'};
+ const m=document.getElementById('mod');document.getElementById('modc').innerHTML=`<h2>${id?'Editar':'Cadastra'} conta</h2>
+ <label>Nome</label><input id="fn" value="${a.nome}"><label>Valor (da parcela, se parcelado)</label><input id="fv" type="number" inputmode="decimal" value="${a.valor}">
+ <label>Data de vencimento</label><input id="fd" type="date" value="${a.venc}">
+ <label>Divisão</label><select id="fi"><option value="3" ${a.div==='3'?'selected':''}>Hec. 25% / Jés. 25% / Ale/Tiago 50%</option><option value="2" ${a.div==='2'?'selected':''}>Hec. 50% / Jés. 50%</option></select>
+ <label>Tipo</label><select id="fc"><option value="variavel" ${a.cat==='variavel'?'selected':''}>Variável (só neste mês)</option><option value="fixa" ${a.cat==='fixa'?'selected':''}>Fixa (repete todo mês)</option></select>
+ <label>Parcelado? Em quantas vezes (1 = não)</label><input id="fp" type="number" min="1" value="${a.parc}">
+ <button class="btn" onclick="saveForm('${id||''}')">Salvar</button>
+ ${id?`<button class="sm er" style="width:100%;padding:12px" onclick="delAcc('${id}')">${confirmDel===id?'Toque de novo para excluir':'Excluir conta'}</button>`:''}
+ <button class="sm" style="width:100%;padding:12px;margin-top:8px" onclick="closeM()">Cancelar</button>`;m.classList.add('on')}
+const closeM=()=>{confirmDel=null;document.getElementById('mod').classList.remove('on')};
+function saveForm(id){const g=i=>document.getElementById(i).value;
+ const a={id:id||'a'+Date.now(),nome:g('fn').trim(),valor:+g('fv'),venc:g('fd'),div:g('fi'),cat:g('fc'),parc:Math.max(1,+g('fp')||1)};
+ if(!a.nome||!a.valor||!a.venc){alert('Preencha nome, valor e vencimento.');return}
+ const i=S.acc.findIndex(x=>x.id===a.id);i>=0?S.acc[i]=a:S.acc.push(a);
+ save();M=a.venc.slice(0,7);tab='home';closeM();render()}
+function delAcc(id){if(confirmDel!==id){confirmDel=id;openForm(id);return}S.acc=S.acc.filter(x=>x.id!==id);save();closeM();render()}
+</script></html>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getFirestore,doc,onSnapshot,setDoc} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+// >>> COLE AQUI o firebaseConfig do seu projeto (Console Firebase > Configurações do projeto > Seus apps)
+const cfg={apiKey:"COLE_AQUI",authDomain:"COLE_AQUI",projectId:"COLE_AQUI",appId:"COLE_AQUI"};
+const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),ref=doc(db,"financas","dados");
+const $=i=>document.getElementById(i);let unsub=null;
+window.cloudSave=s=>setDoc(ref,JSON.parse(JSON.stringify(s))).catch(e=>alert("Erro ao salvar: "+e.message));
+window.cloudOut=()=>signOut(auth);
+window.doLogin=async()=>{$('lerr').textContent='';
+ try{await signInWithEmailAndPassword(auth,$('le').value.trim(),$('lp').value)}
+ catch(e){$('lerr').textContent='E-mail ou senha incorretos.'}};
+onAuthStateChanged(auth,u=>{
+ if(unsub){unsub();unsub=null}
+ $('login').style.display=u?'none':'block';$('main').style.display=u?'block':'none';
+ if(!u)return;
+ unsub=onSnapshot(ref,snap=>setState(snap.exists()?snap.data():{}),e=>alert("Erro ao carregar: "+e.message));
+});
+</script></body></html>
