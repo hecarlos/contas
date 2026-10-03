@@ -148,7 +148,7 @@ window.cloudSave=s=>setDoc(ref,JSON.parse(JSON.stringify(s))).catch(e=>alert("Er
 window.cloudOut=()=>signOut(auth);
 window.doLogin=async()=>{$('lerr').textContent='';
  try{await signInWithEmailAndPassword(auth,$('le').value.trim(),$('lp').value)}
- catch(e){$('lerr').textContent='E-mail ou senha incorretos.'}};
+ catch(e){const c=e.code||'';$('lerr').textContent=cfg.apiKey==='COLE_AQUI'?'O firebaseConfig ainda não foi colado no index.html.':(['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email'].includes(c)?'E-mail ou senha incorretos.':'Erro: '+c)}};
 onAuthStateChanged(auth,u=>{
  if(unsub){unsub();unsub=null}
  $('login').style.display=u?'none':'block';$('main').style.display=u?'block':'none';
