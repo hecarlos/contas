@@ -59,18 +59,32 @@ select.sm{width:auto}
 <script>
 const P={h:'Hecarlos',j:'Jéssica',a:'Alexandre/Tiago'};
 /* Regras de divisão centralizadas: única fonte usada por cálculos e interface. */
-const SH={'3':{h:.25,j:.25,a:.5},'2':{h:.5,j:.5,a:0},'1h':{h:1,j:0,a:0},'1j':{h:0,j:1,a:0}};
-const SH_LABEL={'3':'÷3 (25/25/50)','2':'÷2 (50/50)','1h':'100% Hecarlos','1j':'100% Jéssica'};
-const SH_OPTS=[['3','Hec. 25% / Jés. 25% / Ale-Tiago 50%'],['2','Hec. 50% / Jés. 50%'],['1h','100% Hecarlos'],['1j','100% Jéssica']];
+const SH={'3':{h:.25,j:.25,a:.5},'2':{h:.5,j:.5,a:0},'1h':{h:1,j:0,a:0},'1j':{h:0,j:1,a:0},'1a':{h:0,j:0,a:1}};
+const SH_LABEL={'3':'÷3 (25/25/50)','2':'÷2 (50/50)','1h':'100% Hecarlos','1j':'100% Jéssica','1a':'100% Alexandre/Tiago'};
+const SH_OPTS=[['3','Hec. 25% / Jés. 25% / Ale-Tiago 50%'],['2','Hec. 50% / Jés. 50%'],['1h','100% Hecarlos'],['1j','100% Jéssica'],['1a','100% Alexandre/Tiago']];
 const splitOf=div=>(div&&SH[div])||SH['3'];
 const splitLabel=div=>SH_LABEL[div]||SH_LABEL['3'];
+/* Como o pagamento foi feito: 100% individual ou dividido (cada um pagou sua parte). Reusa SH. */
+const PAY2SH={h:'1h',j:'1j',a:'1a','2':'2','3':'3'};
+const PAY_OPTS=[['1h','Hecarlos (100%)'],['1j','Jéssica (100%)'],['1a','Alexandre/Tiago (100%)'],['2','Hec 50% / Jés 50%'],['3','Hec 25% / Jés 25% / Ale 50%']];
+const PAY_LABEL={'1h':'Hecarlos','1j':'Jéssica','1a':'Alexandre/Tiago','2':'Hec 50% / Jés 50%','3':'Hec 25% / Jés 25% / Ale 50%'};
+const paySingle=pay=>pay==='1h'?'h':pay==='1j'?'j':pay==='1a'?'a':'';
+/* Categoria da conta: 'casa' (geral) ou pessoal de um dono ('h'/'j'/'a'). */
+const SCOPES=[['casa','Casa (conta geral)'],['h','Pessoal · Hecarlos'],['j','Pessoal · Jéssica'],['a','Pessoal · Alexandre/Tiago']];
+const scopeOf=a=>(a&&['casa','h','j','a'].includes(a.scope))?a.scope:'casa';
+const scopeLabel=s=>s==='casa'?'Casa':('Pessoal · '+(P[s]||s));
 const R=v=>(+v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 let S={acc:[],inc:{},paid:{},hist:[]};
 const save=()=>{window.cloudSave&&window.cloudSave(S)};
-window.setState=d=>{S=Object.assign({acc:[],inc:{},paid:{},hist:[]},d||{});if(!Array.isArray(S.hist))S.hist=[];if(!S.paid||typeof S.paid!=='object')S.paid={};render()};
-/* Pagamento: registros antigos são string ('h'/'j'/'a'); novos são {by,at} com data local YYYY-MM-DD. */
+window.setState=d=>{S=Object.assign({acc:[],inc:{},paid:{},hist:[]},d||{});if(!Array.isArray(S.hist))S.hist=[];if(!S.paid||typeof S.paid!=='object')S.paid={};
+ if(Array.isArray(S.acc))S.acc.forEach(a=>{a.scope=scopeOf(a);if(!(a.entrada>0))a.entrada=+a.entrada||0});render()};
+/* Pagamento: registros antigos são string ('h'/'j'/'a') ou {by,at}; novos são {pay,by,at} onde pay é chave de SH. */
 const paidByOf=v=>{if(!v)return'';if(typeof v==='string')return P[v]?v:'';return P[v.by]?v.by:''};
 const paidAtOf=v=>(v&&typeof v==='object'&&v.at)||null;
+const payKeyOf=v=>{if(!v)return null;if(typeof v==='string')return PAY2SH[v]||null;if(v.pay&&SH[v.pay])return v.pay;return (v.by&&PAY2SH[v.by])||null};
+const isPaid=v=>!!payKeyOf(v);
+const paySharesOf=v=>SH[payKeyOf(v)]||{};
+const payLabelOf=v=>PAY_LABEL[payKeyOf(v)]||(paidByOf(v)?payerName(paidByOf(v)):'—');
 const localDateStr=(d)=>{d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const fmtPaidDate=at=>{if(!at)return'Data não registrada';const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(at);return m?`${m[3]}/${m[2]}/${m[1]}`:at};
 const payerName=k=>P[k]||k||'—';
@@ -84,12 +98,13 @@ const mname=k=>{const[y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toL
 function occ(k){const out=[];for(const a of S.acc){const d=mi(k)-mi(a.venc.slice(0,7));const n=+a.parc||1;
  if(d<0)continue;if(n>1){if(d>=n)continue}else if(a.cat!=='fixa'&&d!==0)continue;
  const[y,m]=k.split('-').map(Number),dia=Math.min(+a.venc.slice(8),new Date(y,m,0).getDate());
- out.push({a,k,key:a.id+'@'+k,due:new Date(y,m-1,dia),lbl:n>1?` (${d+1}/${n})`:''})}
+ out.push({a,k,idx:d,key:a.id+'@'+k,due:new Date(y,m-1,dia),lbl:n>1?` (${d+1}/${n})`:''})}
  return out.sort((x,y)=>x.due-y.due)}
-const share=(o,p)=>o.a.valor*splitOf(o.a.div)[p];
+/* Conta pessoal: 100% do dono, fora dos totais da casa. Entrada é só informativa, nunca soma. */
+const share=(o,p)=>{const s=scopeOf(o.a);if(s!=='casa')return p===s?+o.a.valor:0;return o.a.valor*splitOf(o.a.div)[p]};
 const sum=(l,p)=>l.reduce((s,o)=>s+(p?share(o,p):+o.a.valor),0);
 function overdue(){const l=[];if(!S.acc.length)return l;const st=S.acc.map(a=>mi(a.venc.slice(0,7))).reduce((a,b)=>Math.min(a,b));
- for(let i=st;i<=mi(mk(today));i++)occ(fromI(i)).forEach(o=>{if(!paidByOf(S.paid[o.key])&&o.due<today)l.push(o)});return l}
+ for(let i=st;i<=mi(mk(today));i++)occ(fromI(i)).forEach(o=>{if(!isPaid(S.paid[o.key])&&o.due<today)l.push(o)});return l}
 function inc(k,p){const v=S.inc[k]?.[p];if(v&&v.r!==''&&v.r!=null)return{v:+v.r,s:'real'};if(v&&v.p!==''&&v.p!=null)return{v:+v.p,s:'prev'};
  for(let i=1;i<=24;i++){const w=S.inc[shift(k,-i)]?.[p];if(w){const x=(w.r!==''&&w.r!=null)?w.r:w.p;if(x!==''&&x!=null)return{v:+x,s:'base'}}}return{v:0,s:'-'}}
 function setInc(p,f,val){S.inc[M]=S.inc[M]||{};S.inc[M][p]=S.inc[M][p]||{p:'',r:''};S.inc[M][p][f]=val;save();render()}
@@ -97,29 +112,39 @@ function occKeyInfo(key){const at=key.lastIndexOf('@');if(at<0)return null;const
  const a=S.acc.find(x=>x.id===accId);if(!a||!/^\d{4}-\d{2}$/.test(k))return{accId,k,a:null};
  const[y,m]=k.split('-').map(Number),dia=Math.min(+String(a.venc||'').slice(8)||1,new Date(y,m,0).getDate());
  return{accId,k,a,due:new Date(y,m-1,dia)}}
-function snapshotHist(key,by,at){if(!Array.isArray(S.hist))S.hist=[];
- if(S.hist.some(h=>h.key===key))return;
- const info=occKeyInfo(key);if(!info||!info.a)return;
- const n=+info.a.parc||1,d=mi(info.k)-mi(String(info.a.venc).slice(0,7));
- S.hist.push({pid:key+'|'+by+'|'+at,key,accId:info.accId,nome:info.a.nome,valor:+info.a.valor,venc:info.a.venc,div:info.a.div,cat:info.a.cat,month:info.k,due:info.due.getFullYear()+'-'+String(info.due.getMonth()+1).padStart(2,'0')+'-'+String(info.due.getDate()).padStart(2,'0'),lbl:n>1?` (${d+1}/${n})`:'',by,at})}
-function setPaid(key,v){if(v){const at=localDateStr();S.paid[key]={by:v,at};snapshotHist(key,v,at)}else{delete S.paid[key];if(Array.isArray(S.hist))S.hist=S.hist.filter(h=>h.key!==key)}save();render()}
+function histEntry(key,a,pay,at){const c=key.lastIndexOf('@');if(c<0)return null;const accId=key.slice(0,c),mk_=key.slice(c+1);
+ const[y,m]=mk_.split('-').map(Number);if(!y||!m)return null;
+ const dia=Math.min(+String(a.venc).slice(8)||1,new Date(y,m,0).getDate());
+ const n=+a.parc||1,d=mi(mk_)-mi(String(a.venc).slice(0,7));
+ return{pid:key+'|'+pay+'|'+(at||'sem-data'),key,accId,nome:a.nome,valor:+a.valor,venc:a.venc,div:a.div,cat:a.cat,scope:scopeOf(a),entrada:+a.entrada||0,month:mk_,due:y+'-'+String(m).padStart(2,'0')+'-'+String(dia).padStart(2,'0'),lbl:n>1?` (${d+1}/${n})`:'',pay,by:paySingle(pay),at:at||null}}
+function pushHist(key,a,pay,at){if(!Array.isArray(S.hist))S.hist=[];if(S.hist.some(h=>h.key===key))return;
+ const h=histEntry(key,a,pay,at);if(h)S.hist.push(h)}
+function snapshotHist(key,pay,at){const info=occKeyInfo(key);if(!info||!info.a)return;pushHist(key,info.a,pay,at)}
+function setPaid(key,v){if(v&&SH[v]){const at=localDateStr();S.paid[key]={pay:v,by:paySingle(v),at};snapshotHist(key,v,at)}else{delete S.paid[key];if(Array.isArray(S.hist))S.hist=S.hist.filter(h=>h.key!==key)}save();render()}
 function unmarkPaid(key){if(!confirm('Desfazer o pagamento desta conta?'))return;delete S.paid[key];if(Array.isArray(S.hist))S.hist=S.hist.filter(h=>h.key!==key);save();render()}
-function payer(o){const cur=paidByOf(S.paid[o.key]);return`<select class="sm" onchange="setPaid('${o.key}',this.value)"><option value="">Pagar…</option>${Object.entries(P).map(([k,n])=>`<option value="${k}" ${cur===k?'selected':''}>Pago por ${n}</option>`).join('')}</select>`}
-function row(o,p){const v=S.paid[o.key],pd=paidByOf(v),d=Math.round((o.due-today)/864e5),c=pd?'paid':d<0?'late':d<=3?'soon':'';
- const st=pd?`<span class="ok">✔ pago por ${payerName(pd)}</span>`:d<0?`<span class="er">${-d}d em atraso</span>`:d<=3?`<span style="color:var(--wa)">vence ${d?'em '+d+'d':'hoje'}</span>`:'';
+/* Exclui só o registro pago (pagamento + histórico da parcela). A conta continua e a parcela volta como pendente. */
+function delPaidEntry(key){if(!confirm('Excluir este pagamento do histórico? A conta continuará cadastrada e a parcela voltará como pendente.'))return;
+ delete S.paid[key];if(Array.isArray(S.hist))S.hist=S.hist.filter(h=>h.key!==key);save();render()}
+function payer(o){const cur=payKeyOf(S.paid[o.key]);return`<select class="sm" onchange="setPaid('${o.key}',this.value)"><option value="">Pagar…</option>${PAY_OPTS.map(([k,n])=>`<option value="${k}" ${cur===k?'selected':''}>${n}</option>`).join('')}</select>`}
+function row(o,p){const v=S.paid[o.key],pd=isPaid(v),d=Math.round((o.due-today)/864e5),c=pd?'paid':d<0?'late':d<=3?'soon':'';
+ const st=pd?`<span class="ok">✔ ${payLabelOf(v)}</span>`:d<0?`<span class="er">${-d}d em atraso</span>`:d<=3?`<span style="color:var(--wa)">vence ${d?'em '+d+'d':'hoje'}</span>`:'';
+ const sc=scopeOf(o.a),ent=(+o.a.entrada>0&&o.idx===0)?`<span>entrada ${R(o.a.entrada)} (inf.)</span>`:'';
  return`<div class="row ${c}"><div class="t"><span class="n">${o.a.nome}${o.lbl}</span><b>${R(p?share(o,p):o.a.valor)}</b></div>
- <div class="m"><span>${o.due.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</span><span>${splitLabel(o.a.div)}</span><span>${o.a.cat}</span>${st}${payer(o)}
+ <div class="m"><span>${o.due.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</span><span>${sc==='casa'?splitLabel(o.a.div):scopeLabel(sc)}</span><span>${o.a.cat}</span>${ent}${st}${payer(o)}
  <button class="sm" onclick="openForm('${o.a.id}')">Editar</button></div></div>`}
 function nav(){document.getElementById('nav').innerHTML=[['home','Início'],['h','Hecarlos'],['j','Jéssica'],['a','Alexandre/Tiago'],['late','Vencidas'],['paid','Contas pagas']].map(([k,n])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${n}</button>`).join('')+'<button onclick="cloudOut()">Sair</button>'}
 const mon=()=>`<div class="mon"><button onclick="M=shift(M,-1);render()">‹</button><b>${mname(M)}</b><button onclick="M=shift(M,1);render()">›</button></div>`;
-function home(){const l=occ(M),od=overdue(),tot=sum(l);
+function home(){const all=occ(M),l=all.filter(o=>scopeOf(o.a)==='casa'),od=overdue(),tot=sum(l);
  const fx=l.filter(o=>o.a.cat==='fixa').reduce((s,o)=>s+ +o.a.valor,0),vr=tot-fx;
  const inH=inc(M,'h').v,inJ=inc(M,'j').v,dH=sum(l,'h'),dJ=sum(l,'j');
  const paidBy={h:0,j:0,a:0},own={h:0,j:0,a:0};
- l.forEach(o=>{const by=paidByOf(S.paid[o.key]);if(by){paidBy[by]+=+o.a.valor;['h','j','a'].forEach(q=>own[q]+=share(o,q))}});
+ l.forEach(o=>{const sh=paySharesOf(S.paid[o.key]);if(!Object.keys(sh).length)return;['h','j','a'].forEach(q=>{paidBy[q]+=+o.a.valor*(sh[q]||0);own[q]+=share(o,q)})});
  const net=Object.keys(P).map(p=>[p,paidBy[p]-own[p]]).filter(x=>Math.abs(x[1])>0.5);
- return mon()+`<h2>Total Geral de Contas</h2><div class="pill big"><b>${R(tot)}</b><small>${l.length} contas · pagamento programado dia 10</small></div>
+ const pers={h:0,j:0,a:0};all.forEach(o=>{const s=scopeOf(o.a);if(s!=='casa')pers[s]+=+o.a.valor});
+ const persTot=pers.h+pers.j+pers.a;
+ return mon()+`<h2>Total Geral de Contas</h2><div class="pill big"><b>${R(tot)}</b><small>${l.length} contas da casa · pagamento programado dia 10</small></div>
  ${['h','j','a'].map(p=>`<div class="pill"><span>Sub Total: ${P[p]}</span><b>${R(sum(l,p))}</b></div>`).join('')}
+ ${persTot?`<div class="mut" style="font-size:12.5px;margin:4px 2px">Pessoais no mês (só nas telas individuais): ${['h','j','a'].filter(p=>pers[p]>0).map(p=>`${P[p].split('/')[0]} ${R(pers[p])}`).join(' · ')}</div>`:''}
  <button class="btn" onclick="openForm()">Cadastra conta</button>
  <div class="pill" onclick="tab='late';render()" style="cursor:pointer"><span>Vencidas: <b class="${od.length?'er':''}">${od.length}</b></span><span>Valor total: <b class="${od.length?'er':''}">${R(sum(od))}</b></span></div>
  <div class="sec">Saldos</div><div class="wrap"><table><tr><th></th><th>Saldo Inicial</th><th>Saldo Pós conta</th></tr>
@@ -129,7 +154,7 @@ function home(){const l=occ(M),od=overdue(),tot=sum(l);
  <div class="m mut" style="display:flex;justify-content:space-between;margin-top:6px"><span>Fixas ${R(fx)}</span><span>Variáveis ${R(vr)}</span></div></div>
  ${net.length?`<div class="sec">Acertos entre pessoas</div><div class="card">${net.map(([p,v])=>`<div>${P[p]} ${v>0?'<b class="ok">tem a receber</b>':'<b class="er">deve</b>'} ${R(Math.abs(v))}</div>`).join('')}</div>`:''}
  <div class="sec">Contas do mês</div>${l.map(o=>row(o)).join('')||'<p class="mut">Nenhuma conta neste mês.</p>'}`}
-function person(p){const l=occ(M).filter(o=>splitOf(o.a.div)[p]>0),d=sum(l,p),has=p!=='a',i=inc(M,p),v=S.inc[M]?.[p]||{p:'',r:''};
+function person(p){const l=occ(M).filter(o=>{const s=scopeOf(o.a);return s!=='casa'?s===p:splitOf(o.a.div)[p]>0}),d=sum(l,p),has=p!=='a',i=inc(M,p),v=S.inc[M]?.[p]||{p:'',r:''};
  let h=mon()+`<h2>Descrição: ${P[p]}</h2><div class="grid"><div class="pill"><span>Despesa total:<br><b>${R(d)}</b></span></div>`;
  if(has)h+=`<div class="pill"><span>Saldo Livre:<br><b class="${i.v-d<0?'er':''}">${R(i.v-d)}</b></span></div></div><div class="bar"><i style="width:${i.v?Math.max(0,Math.min(100,(i.v-d)/i.v*100)):0}%"></i></div>`;else h+='</div>';
  h+=l.map(o=>row(o,p)).join('')||'<p class="mut">Nenhuma conta neste mês.</p>';
@@ -141,38 +166,45 @@ function person(p){const l=occ(M).filter(o=>splitOf(o.a.div)[p]>0),d=sum(l,p),ha
 function late(){const l=overdue();return`<h2>Contas vencidas</h2><div class="pill"><span>Total de contas: <b class="er">${l.length}</b></span><span>Valor: <b class="er">${R(sum(l))}</b></span></div>
  ${l.map(o=>`<div class="mut" style="margin-top:10px;font-size:12.5px;text-transform:capitalize">${mname(o.k)}</div>`+row(o)).join('')||'<p class="mut" style="text-align:center">Nenhuma conta vencida 🎉</p>'}
  <button class="btn" onclick="openForm()">Cadastra conta</button>`}
-let paidFilter='';
+let paidFilter='',paidScope='';
+const normPay=h=>h.pay&&SH[h.pay]?h.pay:(h.by&&PAY2SH[h.by])||null;
 /* Histórico = snapshots em S.hist (sobrevivem a edição/exclusão) + ocorrências pagas atuais sem snapshot (registros antigos). Sem duplicar a mesma key. */
 function paidEntries(k){const out=[],seen=new Set();
  const histByKey={};(Array.isArray(S.hist)?S.hist:[]).forEach(h=>{if(h.month===k)histByKey[h.key]=h});
- occ(k).forEach(o=>{const by=paidByOf(S.paid[o.key]);if(!by)return;const h=histByKey[o.key];
-  if(h){out.push({key:o.key,nome:h.nome+(h.lbl||''),valor:+h.valor,venc:h.venc,div:h.div,cat:h.cat,due:new Date(h.due+'T12:00:00'),by:h.by||by,at:h.at||paidAtOf(S.paid[o.key])});}
-  else{out.push({key:o.key,nome:o.a.nome+o.lbl,valor:+o.a.valor,venc:o.a.venc,div:o.a.div,cat:o.a.cat,due:o.due,by,at:paidAtOf(S.paid[o.key])});}
-  seen.add(o.key)});
- (Array.isArray(S.hist)?S.hist:[]).forEach(h=>{if(h.month!==k||seen.has(h.key))return;
-  out.push({key:h.key,nome:h.nome+(h.lbl||''),valor:+h.valor,venc:h.venc,div:h.div,cat:h.cat,due:h.due?new Date(h.due+'T12:00:00'):null,by:h.by,at:h.at||null})});
+ const live=(o,pay,at)=>({key:o.key,nome:o.a.nome+o.lbl,valor:+o.a.valor,venc:o.a.venc,div:o.a.div,cat:o.a.cat,scope:scopeOf(o.a),entrada:+o.a.entrada||0,due:o.due,pay,at:at||null});
+ const fromH=h=>({key:h.key,nome:h.nome+(h.lbl||''),valor:+h.valor,venc:h.venc,div:h.div,cat:h.cat,scope:h.scope||'casa',entrada:+h.entrada||0,due:h.due?new Date(h.due+'T12:00:00'):null,pay:normPay(h),at:h.at||null});
+ occ(k).forEach(o=>{const v=S.paid[o.key];if(!isPaid(v))return;const h=histByKey[o.key];
+  out.push(h?Object.assign(fromH(h),{by:h.by}):live(o,payKeyOf(v),paidAtOf(v)));seen.add(o.key)});
+ (Array.isArray(S.hist)?S.hist:[]).forEach(h=>{if(h.month!==k||seen.has(h.key))return;out.push(fromH(h))});
  return out}
 function paidScreen(){let l=paidEntries(M);
- if(paidFilter)l=l.filter(e=>e.by===paidFilter);
+ if(paidFilter)l=l.filter(e=>e.pay&&(SH[e.pay][paidFilter]||0)>0);
+ if(paidScope==='casa')l=l.filter(e=>e.scope==='casa');
+ if(paidScope==='pers')l=l.filter(e=>e.scope!=='casa');
  l=l.slice().sort((a,b)=>`${b.at||''}`.localeCompare(`${a.at||''}`)||((b.due||0)-(a.due||0)));
  const tot=l.reduce((s,e)=>s+(+e.valor||0),0);
  return mon()+`<h2>Contas pagas</h2>
- <div class="card"><label class="mut">Quem pagou</label><select id="pf" onchange="paidFilter=this.value;render()"><option value="">Todos</option>${Object.entries(P).map(([k,n])=>`<option value="${k}" ${paidFilter===k?'selected':''}>${n}</option>`).join('')}</select></div>
+ <div class="card"><div class="grid"><div><label class="mut">Quem pagou</label><select id="pf" onchange="paidFilter=this.value;render()"><option value="">Todos</option>${Object.entries(P).map(([k,n])=>`<option value="${k}" ${paidFilter===k?'selected':''}>${n}</option>`).join('')}</select></div>
+ <div><label class="mut">Tipo</label><select onchange="paidScope=this.value;render()"><option value="">Todas</option><option value="casa" ${paidScope==='casa'?'selected':''}>Casa</option><option value="pers" ${paidScope==='pers'?'selected':''}>Pessoais</option></select></div></div></div>
  <div class="pill"><span>Pagamentos: <b>${l.length}</b></span><span>Total pago: <b class="ok">${R(tot)}</b></span></div>
- ${l.map(e=>{const sp=splitOf(e.div);const parts=['h','j','a'].map(q=>`${P[q].split('/')[0]} ${Math.round(sp[q]*100)}%`).join(' · ');
+ ${l.map(e=>{const sp=splitOf(e.div);const parts=e.scope==='casa'?['h','j','a'].map(q=>`${P[q].split('/')[0]} ${Math.round(sp[q]*100)}%`).join(' · '):scopeLabel(e.scope);
   const due=e.due?e.due.toLocaleDateString('pt-BR'):'—';
   return`<div class="row paid"><div class="t"><span class="n">${e.nome}</span><b>${R(e.valor)}</b></div>
-  <div class="m"><span>Venc: ${due}</span><span>${splitLabel(e.div)}</span><span>${e.cat||''}</span></div>
-  <div class="m"><span>Pago por <b>${payerName(e.by)}</b></span><span>${e.at?'Em '+fmtPaidDate(e.at):'Data não registrada'}</span><span class="ok">✔ pago</span></div>
-  <div class="m"><span class="mut">${parts}</span><button class="sm" onclick="unmarkPaid('${e.key}')">Desfazer</button></div></div>`}).join('')||`<p class="mut" style="text-align:center">${paidFilter?'Nenhum pagamento de '+payerName(paidFilter)+' neste mês.':'Nenhum pagamento neste mês.'}</p>`}`}
+  <div class="m"><span>Venc: ${due}</span><span>${e.scope==='casa'?splitLabel(e.div):scopeLabel(e.scope)}</span><span>${e.cat||''}</span>${e.entrada>0?`<span>entrada ${R(e.entrada)} (inf.)</span>`:''}</div>
+  <div class="m"><span>Pagto: <b>${e.pay?PAY_LABEL[e.pay]:payerName(e.by)}</b></span><span>${e.at?'Em '+fmtPaidDate(e.at):'Data não registrada'}</span><span class="ok">✔ pago</span></div>
+  <div class="m"><span class="mut">${parts}</span><button class="sm" onclick="unmarkPaid('${e.key}')">Desfazer</button><button class="sm er" onclick="delPaidEntry('${e.key}')">Excluir</button></div></div>`}).join('')||`<p class="mut" style="text-align:center">Nenhum pagamento neste mês para o filtro selecionado.</p>`}`}
 function render(){nav();document.getElementById('app').innerHTML=tab==='home'?home():tab==='late'?late():tab==='paid'?paidScreen():person(tab)}
-function openForm(id){const a=S.acc.find(x=>x.id===id)||{nome:'',valor:'',venc:mk(today)+'-10',div:'3',parc:1,cat:'variavel'};
+function openForm(id){const a=S.acc.find(x=>x.id===id)||{nome:'',valor:'',venc:mk(today)+'-10',div:'3',parc:1,cat:'variavel',scope:'casa',entrada:0};
  const m=document.getElementById('mod');document.getElementById('modc').innerHTML=`<h2>${id?'Editar':'Cadastra'} conta</h2>
  <label>Nome</label><input id="fn" value="${String(a.nome||'').replace(/"/g,'&quot;')}"><label>Valor (da parcela, se parcelado)</label><input id="fv" type="number" inputmode="decimal" value="${a.valor}">
- <label>Data de vencimento</label><input id="fd" type="date" value="${a.venc}">
- <label>Divisão</label><select id="fi">${SH_OPTS.map(([v,n])=>`<option value="${v}" ${a.div===v?'selected':''}>${n}</option>`).join('')}</select>
+ <label>Data de vencimento (1º vencimento, se parcelado)</label><input id="fd" type="date" value="${a.venc}">
+ <label>Categoria</label><select id="fs">${SCOPES.map(([v,n])=>`<option value="${v}" ${scopeOf(a)===v?'selected':''}>${n}</option>`).join('')}</select>
+ <label>Divisão (só para contas da casa)</label><select id="fi">${SH_OPTS.map(([v,n])=>`<option value="${v}" ${a.div===v?'selected':''}>${n}</option>`).join('')}</select>
  <label>Tipo</label><select id="fc"><option value="variavel" ${a.cat==='variavel'?'selected':''}>Variável (só neste mês)</option><option value="fixa" ${a.cat==='fixa'?'selected':''}>Fixa (repete todo mês)</option></select>
  <label>Parcelado? Em quantas vezes (1 = não)</label><input id="fp" type="number" min="1" value="${a.parc}">
+ <label>Valor de entrada — só informativo, não soma nos totais (0 = sem)</label><input id="fe" type="number" min="0" inputmode="decimal" value="${+a.entrada||0}">
+ <div class="grid"><div><label>Parcelas já pagas (desde a 1ª)</label><input id="fq" type="number" min="0" value="0"></div>
+ <div><label>Quem pagou as anteriores</label><select id="fb"><option value="h">Hecarlos</option><option value="j">Jéssica</option><option value="a">Alexandre/Tiago</option></select></div></div>
  <div class="acts"><button class="btn" onclick="saveForm('${id||''}')">Salvar</button>
  ${id?`<button class="sm er" style="width:100%;padding:12px" onclick="delAcc('${id}')">${confirmDel===id?'Toque de novo para excluir':'Excluir conta'}</button>`:''}
  <button class="sm" style="width:100%;padding:12px;margin-top:8px" onclick="closeM()">Cancelar</button></div>`;m.classList.add('on');fitModal()}
@@ -196,24 +228,24 @@ function unfitModal(){document.body.style.overflow='';document.documentElement.s
  if(window.visualViewport&&_vvH){window.visualViewport.removeEventListener('resize',_vvH);window.visualViewport.removeEventListener('scroll',_vvH);_vvH=null}}
 function saveForm(id){const g=i=>document.getElementById(i).value;
  let div=g('fi');if(!SH[div])div='3';
- const a={id:id||'a'+Date.now(),nome:g('fn').trim(),valor:+g('fv'),venc:g('fd'),div,cat:g('fc'),parc:Math.max(1,+g('fp')||1)};
+ let scope=g('fs');if(!['casa','h','j','a'].includes(scope))scope='casa';
+ if(scope!=='casa')div=scope==='h'?'1h':scope==='j'?'1j':'1a';
+ const parc=Math.max(1,+g('fp')||1);
+ const a={id:id||'a'+Date.now(),nome:g('fn').trim(),valor:+g('fv'),venc:g('fd'),div,cat:g('fc'),scope,entrada:Math.max(0,+g('fe')||0),parc};
  if(!a.nome||!a.valor||!a.venc){alert('Preencha nome, valor e vencimento.');return}
  if(id){const old=S.acc.find(x=>x.id===id);
-  if(old){Object.keys(S.paid).forEach(key=>{if(!key.startsWith(id+'@'))return;const by=paidByOf(S.paid[key]);if(!by)return;
-   if(!Array.isArray(S.hist))S.hist=[];if(S.hist.some(h=>h.key===key))return;
-   const at=paidAtOf(S.paid[key]);const mk_=key.slice(id.length+1);const[y,m]=mk_.split('-').map(Number);
-   if(!y||!m)return;const dia=Math.min(+String(old.venc).slice(8)||1,new Date(y,m,0).getDate());
-   const n=+old.parc||1,d=mi(mk_)-mi(String(old.venc).slice(0,7));
-   S.hist.push({pid:key+'|'+by+'|'+(at||'sem-data'),key,accId:id,nome:old.nome,valor:+old.valor,venc:old.venc,div:old.div,cat:old.cat,month:mk_,due:y+'-'+String(m).padStart(2,'0')+'-'+String(dia).padStart(2,'0'),lbl:n>1?` (${d+1}/${n})`:'',by,at:at||null})})}}
+  if(old)Object.keys(S.paid).forEach(key=>{if(!key.startsWith(id+'@')||!isPaid(S.paid[key]))return;
+   const v=S.paid[key];pushHist(key,old,payKeyOf(v),paidAtOf(v))})}
  const i=S.acc.findIndex(x=>x.id===a.id);i>=0?S.acc[i]=a:S.acc.push(a);
+ /* Parcelas já pagas desde o início: marca as K primeiras como pagas (sem data — "Data não registrada"). */
+ let K=Math.max(0,Math.min(parc,+g('fq')||0));let fb=g('fb');if(!P[fb])fb='h';
+ for(let n=0;n<K;n++){const key=a.id+'@'+shift(a.venc.slice(0,7),n);
+  if(isPaid(S.paid[key]))continue;S.paid[key]=fb;pushHist(key,a,PAY2SH[fb],null)}
  save();M=a.venc.slice(0,7);tab='home';closeM();render()}
 function delAcc(id){if(confirmDel!==id){confirmDel=id;openForm(id);return}
  const old=S.acc.find(x=>x.id===id);
- if(old){Object.keys(S.paid).forEach(key=>{if(!key.startsWith(id+'@'))return;const by=paidByOf(S.paid[key]);if(!by)return;
-  if(!Array.isArray(S.hist))S.hist=[];if(!S.hist.some(h=>h.key===key)){const at=paidAtOf(S.paid[key]);const mk_=key.slice(id.length+1);const[y,m]=mk_.split('-').map(Number);
-   if(y&&m){const dia=Math.min(+String(old.venc).slice(8)||1,new Date(y,m,0).getDate());const n=+old.parc||1,d=mi(mk_)-mi(String(old.venc).slice(0,7));
-    S.hist.push({pid:key+'|'+by+'|'+(at||'sem-data'),key,accId:id,nome:old.nome,valor:+old.valor,venc:old.venc,div:old.div,cat:old.cat,month:mk_,due:y+'-'+String(m).padStart(2,'0')+'-'+String(dia).padStart(2,'0'),lbl:n>1?` (${d+1}/${n})`:'',by,at:at||null})}}
-  delete S.paid[key]})}
+ if(old)Object.keys(S.paid).forEach(key=>{if(!key.startsWith(id+'@')||!isPaid(S.paid[key]))return;
+  const v=S.paid[key];pushHist(key,old,payKeyOf(v),paidAtOf(v));delete S.paid[key]});
  S.acc=S.acc.filter(x=>x.id!==id);save();closeM();render()}
 </script>
 <script type="module">
